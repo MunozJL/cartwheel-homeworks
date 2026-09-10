@@ -25,7 +25,12 @@ homework/module-1/hw1-session-notes.md
 .sessions.db-shm
 .sessions.db-wal
 homework/module-1/hw2-progress-notes.md
+
+# HW2 local run artifacts (scripts, logs, captured run data)
 homework/module-1/hw2_fire_requests.py
 homework/module-1/hw2_verify_traces.py
 homework/module-1/.compose-up.log
+homework/module-1/.compose-pull.log
+homework/module-1/.server.log
 homework/module-1/.hw2_fired.json
+homework/module-1/.partf.json
