@@ -25,3 +25,7 @@ homework/module-1/hw1-session-notes.md
 .sessions.db-shm
 .sessions.db-wal
 homework/module-1/hw2-progress-notes.md
+homework/module-1/hw2_fire_requests.py
+homework/module-1/hw2_verify_traces.py
+homework/module-1/.compose-up.log
+homework/module-1/.hw2_fired.json
