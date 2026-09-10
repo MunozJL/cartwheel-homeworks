@@ -17,3 +17,10 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Personal HW progress notes (not a submission file).
+homework/module-1/hw1-progress-notes.md
+homework/module-1/hw1_capture.py
+homework/module-1/hw1-session-notes.md
+.sessions.db-shm
+.sessions.db-wal
