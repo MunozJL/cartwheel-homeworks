@@ -48,7 +48,7 @@ You will review 5 to 10 traces in the standard Langfuse annotation view, then us
 
 Next, ask your AI coding agent to read the error analysis skill and the Workshop notes. Require the coding agent to compare the preliminary Workshop runs with several Langfuse traces, then propose a visual organization before writing code. You may begin with the following prompt:
 
-> Read `analysis/skill/SKILL.md` and `analysis/report/workshop_notes.md`. Use Workshop to inspect the preliminary runs, then inspect 5 to 10 traces from my Langfuse project. Describe the trace fields and the visual organization you propose for human review. Do not write the interface until I approve the proposal. Use `analysis/ui/index.html` and `analysis/server.py` as implementation references, but adapt the interface to the trace structure you observe.
+> Read `analysis/skill/SKILL.md`. Inspect 5 to 10 traces from my Langfuse project. Describe the trace fields and the visual organization you propose for human review. Do not write the interface until I approve the proposal. Use `analysis/ui/index.html` and `analysis/server.py` as implementation references, but adapt the interface to the trace structure you observe.
 
 After you approve the proposal, ask the coding agent to build the interface under `analysis/review_app/`. Cartwheel creates one Langfuse trace per user turn, so a multi-turn conversation produces several traces. The interface must group traces by `cartwheel.session_id` and display each conversation in chronological order, otherwise a followup turn appears in isolation and the reviewer cannot see the tool calls from the earlier turn. The interface must provide:
 
