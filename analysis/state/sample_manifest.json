@@ -1,0 +1,182 @@
+[
+  {
+    "trace_id": "869504375420c6cefde4de97c2a892d3",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "404c8394f4f606d56dfd53474cc6700c",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "a7c487257ad90181a8c4ad88a639ec21",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "1383fa60b8c63d0d2b9dc28828d7c328",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "1fdc1498189488e8b064a1866cca178d",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "f34db106040bc4dbcfa63aebdbc65648",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "290c982e8c64b532b474c9c44c303cb7",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "9c27da8fd5ecad5400f702dffe7e545d",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "fd8f641b26517e0c8b314d3dead0224c",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "18d3564e76960b6d0b5a224b4d4d077c",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "e0b86c984ec5060fc787ff917e317a0c",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "5819384c804bc541854de44e0d9b4ee7",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "0e918254da7c0b797966b39e7d6bcb7b",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "26ee538a46fb61c3abb398f6b7d1e0fd",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "bc37eda704d51c206aab470398b8ef3b",
+    "reason": "random pick",
+    "batch": "batch1_uniform",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "07cd2102a1b46893ffa739bbcbadc5cc",
+    "reason": "cluster 0 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "00362515ff0284e7f5df1f35f0acb338",
+    "reason": "cluster 1 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "006e49048f0b00da75e277271acfcd4f",
+    "reason": "cluster 2 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "0a8caaab996b0240ca0301cf3718529f",
+    "reason": "cluster 3 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "abd52daf820497f0c90171a2f80f473f",
+    "reason": "cluster 4 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "09786c022d2b199fcfed20d976809533",
+    "reason": "cluster 0 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "023fc26cf90ce86facb7ceb177da5716",
+    "reason": "cluster 1 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "00d97df6567e87c82a3b0341bd12a2d9",
+    "reason": "cluster 2 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "0ac76eed39bf31d48a4d5d08d4ebedff",
+    "reason": "cluster 3 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "2fbf089abab14aaabdaf570711c94edd",
+    "reason": "cluster 4 representative",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "9ccac29c2f46baec94d7204d1e7dab5f",
+    "reason": "random pick",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "fb27f2e0703ef7b03ab6c74ff2a12570",
+    "reason": "random pick",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "136116ddb26e8b659eb22b697447b713",
+    "reason": "random pick",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "cb27fbe471052fadf9f95ec810ec17e4",
+    "reason": "random pick",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "7f6ffd2aae0c550063db1a0bbee4c86a",
+    "reason": "random pick",
+    "batch": "batch1_cluster",
+    "picked_at": "2026-09-17T15:48:22Z"
+  }
+]

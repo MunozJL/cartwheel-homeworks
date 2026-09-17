@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<!--
+  Homework 4 review interface (adapted from the course's reference UI at
+  analysis/ui/index.html, which was itself built from the instructor's
+  error-discovery skill).
+
+  Kept from the reference, unchanged, because it was already correct against
+  the skill's own design spec: the CSS role-color encoding, the pending-
+  highlight-before-focus annotation mechanic, the margin-note layout math,
+  the suggestion accept/dismiss flow, and the 2-second poll loop. See
+  analysis/report/interface_comparison.md for the specific before/after.
+
+  Changed for real Cartwheel data (the reference only ever saw a hand-built
+  local sample file):
+    - the trace header now shows scenario_group / intent / difficulty /
+      data_quality_case_id and the scenario's *expected* ground truth
+      (joined from scenarios/support_scenarios.jsonl by scenario_id, not
+      invented by a model), plus a permalink back to the live Langfuse trace;
+    - a fourth "Labeling" view: once modes exist, a present/absent grid
+      (one row per sample, one column per mode), Part D/E's structured pass.
+    - state now loads live from a running Langfuse project via
+      GET /api/traces and /api/graph (analysis/review_app/trace_pool.py),
+      not a static export.
+
+  Four views:
+    trace     read one trace/conversation, annotate the first failure in place
+    map       2D projection of the whole pool, clusters + sampled + annotated
+    progress  the failure-mode treemap and the agent-suggestion queue
+    labeling  present/absent judgment per sample x final mode (Part D/E)
+
+  API (analysis/review_app/server.py):
+    GET/POST /api/samples  /api/annotations  /api/patterns  /api/suggestions
+    GET      /api/graph  /api/traces  /api/labels
+    POST     /api/labels  /api/refresh
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cartwheel HW4 review</title>
+<style>
+  :root {
+    /* role hues (Gestalt similarity: one hue per role, full saturation) */
+    --role-user: #2563eb;
+    --role-assistant: #059669;
+    --role-tool-call: #b45309;
+    --role-tool-result: #7c3aed;
+    --role-system: #6b7280;
+    --role-retrieval: #0891b2;
+
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --hl: #fde68a;             /* human annotation highlight */
+    --hl-pending: #fef08a;     /* mid-annotation, before save */
+    --sugg: #ddd6fe;           /* agent suggestion highlight tint */
+    --sugg-border: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  code, pre, .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+
+  /* ---- top bar ---- */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 18px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 50;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 700; }
+  header h1 .dim { color: var(--muted); font-weight: 400; }
+  .views { display: flex; gap: 4px; }
+  .views button {
+    border: 1px solid var(--line); background: var(--bg);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font: inherit;
+  }
+  .views button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .spacer { flex: 1; }
+  .counts { color: var(--muted); font-size: 13px; }
+  .nav { display: flex; gap: 4px; align-items: center; }
+  .nav button {
+    border: 1px solid var(--line); background: var(--bg);
+    width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font: inherit;
+  }
+  .nav .pos { color: var(--muted); font-size: 13px; min-width: 74px; text-align: center; }
+
+  /* ---- toast banner for new samples/suggestions ---- */
+  #toast {
+    position: fixed; right: 18px; bottom: 18px; z-index: 100;
+    background: var(--ink); color: #fff; padding: 10px 16px;
+    border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .2s; max-width: 320px;
+  }
+  #toast.show { opacity: 1; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---- trace view: two columns, body + margin ---- */
+  #trace-view { padding: 20px 18px 120px; }
+  .trace-header {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline;
+    max-width: 980px; margin: 0 auto 14px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .trace-header .tid { font-weight: 700; }
+  .trace-header .meta { color: var(--muted); font-size: 13px; }
+  .trace-header .flag {
+    font-size: 11px; background: #fef3c7; color: #92400e;
+    padding: 2px 7px; border-radius: 10px;
+  }
+  .trace-body-wrap {
+    display: flex; gap: 24px; max-width: 980px; margin: 0 auto;
+    align-items: flex-start; position: relative;
+  }
+  .trace-body { flex: 1; max-width: 720px; }
+  .margin-col { width: 240px; position: relative; flex-shrink: 0; }
+
+  /* a step groups a tool call + its result (Gestalt common region) */
+  .step {
+    border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 20px; overflow: hidden; background: var(--panel);
+  }
+  .step.tight { margin-bottom: 8px; }         /* tight within a logical group */
+
+  .msg { padding: 10px 14px; border-left: 4px solid var(--line); }
+  .msg + .msg { border-top: 1px solid var(--line); }
+  .msg .role {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 5px;
+  }
+  .msg[data-role="user"]        { border-left-color: var(--role-user); }
+  .msg[data-role="user"] .role        { color: var(--role-user); }
+  .msg[data-role="assistant"]   { border-left-color: var(--role-assistant); }
+  .msg[data-role="assistant"] .role   { color: var(--role-assistant); }
+  .msg[data-role="tool_call"]   { border-left-color: var(--role-tool-call); }
+  .msg[data-role="tool_call"] .role   { color: var(--role-tool-call); }
+  .msg[data-role="tool_result"] { border-left-color: var(--role-tool-result); }
+  .msg[data-role="tool_result"] .role { color: var(--role-tool-result); }
+  .msg[data-role="system"]      { border-left-color: var(--role-system); opacity: .55; }
+  .msg[data-role="system"] .role      { color: var(--role-system); }
+  .msg[data-role="retrieval"]   { border-left-color: var(--role-retrieval); }
+  .msg[data-role="retrieval"] .role   { color: var(--role-retrieval); }
+  .msg.boiler { opacity: .5; }                /* identical-across-traces content */
+
+  .msg .text { white-space: pre-wrap; word-wrap: break-word; }
+  .fn { font-weight: 700; }
+  details.args { margin-top: 6px; }
+  details.args summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre.json {
+    background: #f3f4f6; border-radius: 6px; padding: 8px 10px; margin: 6px 0 0;
+    font-size: 12.5px; overflow-x: auto; white-space: pre;
+  }
+  .result-summary { color: var(--muted); font-size: 13px; }
+
+  /* ---- highlights + margin notes ---- */
+  .hl { background: var(--hl); border-radius: 2px; cursor: pointer; }
+  .hl.pending-highlight { background: var(--hl-pending); }
+  .hl.sugg { background: var(--sugg); border-bottom: 2px dashed var(--sugg-border); }
+  .hl.outline { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+  .mnote {
+    position: absolute; left: 0; width: 100%;
+    background: var(--panel); border-left: 3px solid var(--hl);
+    border-radius: 4px; padding: 7px 9px; font-size: 12.5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .mnote.sugg { border-left-color: var(--sugg-border); background: #faf5ff; }
+  .mnote.outline { box-shadow: 0 0 0 2px var(--ink); }
+  .mnote .quote { color: var(--muted); font-style: italic; margin-bottom: 3px; }
+  .mnote .body { white-space: pre-wrap; }
+  .mnote .tag {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    color: var(--sugg-border); text-transform: uppercase; margin-bottom: 3px;
+  }
+  .mnote .acts { margin-top: 5px; display: flex; gap: 6px; }
+  .mnote .acts button {
+    border: 1px solid var(--line); background: var(--bg); font: inherit;
+    font-size: 11px; padding: 2px 8px; border-radius: 5px; cursor: pointer;
+  }
+  .mnote .acts .accept { border-color: var(--role-assistant); color: var(--role-assistant); }
+  .mnote .acts .reject { border-color: #dc2626; color: #dc2626; }
+  .mnote.human .acts { visibility: hidden; }
+  .mnote.human:hover .acts { visibility: visible; }
+
+  /* ---- annotation popover ---- */
+  #popover {
+    position: absolute; z-index: 200; display: none;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.16); padding: 8px;
+  }
+  #popover input {
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+    font: inherit; width: 280px;
+  }
+  #popover .hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+  /* ---- map view ---- */
+  #map-view { padding: 18px; }
+  #map-wrap { max-width: 980px; margin: 0 auto; }
+  #map { width: 100%; height: 620px; background: var(--panel);
+         border: 1px solid var(--line); border-radius: 8px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+
+  /* ---- progress view ---- */
+  #progress-view { padding: 18px; max-width: 980px; margin: 0 auto; }
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .04em; color: var(--muted); margin: 18px 0 10px; }
+  #treemap { display: flex; flex-wrap: wrap; gap: 10px; }
+  .mode-block {
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    background: var(--panel); min-width: 210px; flex: 1 1 210px;
+  }
+  .mode-block h3 { margin: 0 0 4px; font-size: 14px; font-family: ui-monospace, monospace; }
+  .mode-block .count { float: right; color: var(--muted); font-weight: 400; }
+  .mode-block .def { color: var(--muted); font-size: 12.5px; margin: 4px 0 8px; }
+  .mode-block .notes { list-style: none; margin: 0; padding: 0; }
+  .mode-block .notes li { font-size: 12.5px; padding: 3px 0; border-top: 1px dashed var(--line); cursor: pointer; }
+  .mode-block .notes li:hover { color: var(--role-user); }
+  .mode-block .status {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 8px; margin-left: 6px;
+  }
+  .status.candidate { background: #fef3c7; color: #92400e; }
+  .status.confirmed { background: #d1fae5; color: #065f46; }
+  .status.frozen    { background: #e0e7ff; color: #3730a3; }
+
+  #sugg-queue { background: var(--panel); border: 1px solid var(--line);
+                border-radius: 8px; padding: 12px; }
+  .queue-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .queue-tools button {
+    border: 1px solid var(--line); background: var(--bg); font: inherit;
+    font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .queue-tools .accept { border-color: var(--role-assistant); color: var(--role-assistant); }
+  .queue-tools .dismiss { border-color: #dc2626; color: #dc2626; }
+  .sugg-row { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0;
+              border-top: 1px solid var(--line); font-size: 13px; }
+  .sugg-row .mode { font-family: ui-monospace, monospace; font-size: 12px;
+                    color: var(--sugg-border); min-width: 170px; }
+  .sugg-row .quote { flex: 1; cursor: pointer; }
+  .sugg-row .quote:hover { color: var(--role-user); }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+
+  /* ---- labeling view: sample x mode grid ---- */
+  #labeling-view { padding: 18px; max-width: 1100px; margin: 0 auto; }
+  #labeling-wrap table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--panel); }
+  #labeling-wrap th, #labeling-wrap td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+  #labeling-wrap th.mode-col { font-family: ui-monospace, monospace; font-size: 12px; text-align: center; white-space: nowrap; }
+  #labeling-wrap td.trace-col { cursor: pointer; max-width: 360px; }
+  #labeling-wrap td.trace-col:hover { color: var(--role-user); }
+  #labeling-wrap td.trace-col .tid { font-weight: 700; }
+  #labeling-wrap td.trace-col .snippet { color: var(--muted); font-size: 12px; }
+  .tri { display: flex; gap: 3px; justify-content: center; }
+  .tri button {
+    border: 1px solid var(--line); background: var(--bg); font: inherit;
+    font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; min-width: 30px;
+  }
+  .tri button.fail.on { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
+  .tri button.pass.on { background: #d1fae5; border-color: #059669; color: #065f46; }
+  .tri button.unset { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cartwheel <span class="dim">error analysis</span></h1>
+  <div class="views">
+    <button data-view="trace" class="active">Trace</button>
+    <button data-view="map">Map</button>
+    <button data-view="progress">Progress</button>
+    <button data-view="labeling">Labeling</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav" id="trace-nav">
+    <button id="prev">&larr;</button>
+    <span class="pos" id="pos">0 / 0</span>
+    <button id="next">&rarr;</button>
+  </div>
+  <div class="counts" id="counts"></div>
+</header>
+
+<div id="trace-view" class="view active">
+  <div class="trace-header" id="trace-header"></div>
+  <div class="trace-body-wrap">
+    <div class="trace-body" id="trace-body"></div>
+    <div class="margin-col" id="margin-col"></div>
+  </div>
+</div>
+
+<div id="map-view" class="view">
+  <div id="map-wrap">
+    <div class="legend">
+      <span><span class="dot" style="background:#94a3b8"></span> trace</span>
+      <span><span class="dot" style="background:#1a1a1a"></span> in sample</span>
+      <span><span class="dot" style="background:#f97316"></span> annotated</span>
+    </div>
+    <canvas id="map"></canvas>
+  </div>
+</div>
+
+<div id="progress-view" class="view">
+  <div class="section-title">Failure modes</div>
+  <div id="treemap"></div>
+  <div class="section-title">Agent suggestions to review</div>
+  <div id="sugg-queue"></div>
+</div>
+
+<div id="labeling-view" class="view">
+  <div class="section-title">Structured labeling &mdash; one present/absent judgment per sample &times; mode</div>
+  <div id="labeling-empty" class="empty" style="display:none">No modes yet. Name at least one mode in the Progress view before labeling.</div>
+  <div id="labeling-wrap" style="overflow-x:auto"></div>
+</div>
+
+<div id="popover"><input id="note-input" placeholder="what went wrong? (Enter to save)" /><div class="hint">first failure only, in your own words</div></div>
+<div id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * State + API                                                         *
+ * ------------------------------------------------------------------ */
+const state = {
+  samples: [],       // [{trace_id, reason, trace, meta, flags}]
+  annotations: [],   // [{id, trace_id, quote, start, end, note, ts}]
+  suggestions: [],   // [{id, trace_id, mode, quote, start, end}]
+  patterns: {},      // {mode: {definition, status, count, example_trace_ids, example_quotes}}
+  graph: {nodes: [], clusters: []},
+  traces: {},        // trace_id -> full normalized+enriched trace, for lookups the sample list doesn't carry
+  labels: {},        // {mode: [{trace_id, label, note, ts}, ...]} -- present(1)/absent(0) per mode
+  cur: 0,            // index into samples
+};
+
+const api = {
+  async get(path) { const r = await fetch(path); return r.json(); },
+  async post(path, body) {
+    await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                       body: JSON.stringify(body)});
+  },
+};
+
+/* Annotations on disk are usually a bare array (what this app POSTs), but the
+   committed demo seed wraps them as {"annotations": [...]} with a little
+   metadata. Accept either on read; we always write the bare array. */
+function asAnnotationList(a) {
+  if (Array.isArray(a)) return a;
+  if (a && Array.isArray(a.annotations)) return a.annotations;
+  return [];
+}
+
+async function loadAll() {
+  const [samples, annotations, suggestions, patterns, graph, traces, labels] = await Promise.all([
+    api.get('/api/samples'), api.get('/api/annotations'),
+    api.get('/api/suggestions'), api.get('/api/patterns'), api.get('/api/graph'),
+    api.get('/api/traces'), api.get('/api/labels'),
+  ]);
+  state.samples = Array.isArray(samples) ? samples : [];
+  state.annotations = asAnnotationList(annotations);
+  state.suggestions = Array.isArray(suggestions) ? suggestions : [];
+  state.patterns = patterns && typeof patterns === 'object' ? patterns : {};
+  state.graph = graph && graph.nodes ? graph : {nodes: [], clusters: []};
+  state.traces = {};
+  (Array.isArray(traces) ? traces : []).forEach(t => { state.traces[t.id] = t; });
+  state.labels = labels && typeof labels === 'object' ? labels : {};
+}
+
+/* localStorage backup of human annotations, per SKILL.md */
+function backupAnnotations() {
+  try { localStorage.setItem('cartwheel_annotations', JSON.stringify(state.annotations)); }
+  catch (e) {}
+}
+async function saveAnnotations() {
+  backupAnnotations();
+  await api.post('/api/annotations', state.annotations);
+}
+
+/* ------------------------------------------------------------------ *
+ * Rendering: the trace view                                          *
+ * ------------------------------------------------------------------ */
+function curTrace() { return state.samples[state.cur]; }
+
+function renderHeader() {
+  const s = curTrace();
+  const h = document.getElementById('trace-header');
+  if (!s) { h.innerHTML = '<span class="meta">no samples yet</span>'; return; }
+  const m = s.meta || {};
+  const bits = [];
+  bits.push(`<span class="tid">${escape(s.trace_id || s.id)}</span>`);
+  if (m.scenario_id) bits.push(`<span class="meta">${escape(m.scenario_id)}</span>`);
+  if (m.role)  bits.push(`<span class="meta">role: ${escape(m.role)}</span>`);
+  if (m.scenario_group) bits.push(`<span class="meta">${escape(m.scenario_group)}</span>`);
+  if (m.intent) bits.push(`<span class="meta">intent: ${escape(m.intent)}</span>`);
+  if (m.difficulty) bits.push(`<span class="meta">difficulty: ${escape(m.difficulty)}</span>`);
+  if (m.data_quality_case_id) bits.push(`<span class="flag">⚠ ${escape(m.data_quality_case_id)}</span>`);
+  if (m.prompt_version) bits.push(`<span class="meta">prompt: ${escape(m.prompt_version)}</span>`);
+  (s.flags || []).forEach(f => bits.push(`<span class="flag">${escape(f)}</span>`));
+  if (s.permalink) bits.push(`<a href="${escape(s.permalink)}" target="_blank" class="meta" style="text-decoration:underline">open in Langfuse ↗</a>`);
+
+  // Extra metadata is the scenario's GROUND TRUTH from scenarios/support_scenarios.jsonl,
+  // computed from the database/eligibility code -- never a model's own claim about itself.
+  const exp = s.scenario && s.scenario.expected;
+  if (exp) {
+    const label = exp.evaluation === 'objective' ? 'expected outcome' : 'review criterion';
+    const value = exp.outcome || exp.criterion || '';
+    const reason = exp.reason || '';
+    const src = exp.source ? `${exp.source.type}: ${exp.source.reference}` : '';
+    bits.push(
+      `<div style="flex-basis:100%;margin-top:8px;padding:6px 12px;background:rgba(0,0,0,0.03);` +
+      `border-radius:6px;font-size:12px;color:var(--muted)">` +
+      `<strong style="color:var(--ink)">Extra metadata (${escape(label)}):</strong> ${escape(value)}` +
+      (reason ? `<br>${escape(reason)}` : '') +
+      (src ? ` <span class="mono" style="opacity:.8">[${escape(src)}]</span>` : '') +
+      `</div>`
+    );
+  }
+  h.innerHTML = bits.join(' ');
+}
+
+/* Render one trace as a sequence of steps. A tool_call and the tool_result
+   that follows it are grouped into one .step container (common region). */
+function renderTrace() {
+  const s = curTrace();
+  const body = document.getElementById('trace-body');
+  if (!s || !Array.isArray(s.trace)) { body.innerHTML = ''; return; }
+  const html = [];
+  let i = 0;
+  const msgs = s.trace;
+  while (i < msgs.length) {
+    const m = msgs[i];
+    if (m.role === 'tool_call') {
+      // group this call with an immediately-following result
+      const parts = [renderMsg(m, i)];
+      if (i + 1 < msgs.length && msgs[i + 1].role === 'tool_result') {
+        parts.push(renderMsg(msgs[i + 1], i + 1));
+        i++;
+      }
+      html.push(`<div class="step">${parts.join('')}</div>`);
+    } else {
+      html.push(`<div class="step">${renderMsg(m, i)}</div>`);
+    }
+    i++;
+  }
+  body.innerHTML = html.join('');
+  applyHighlights();
+  layoutMargin();
+}
+
+function renderMsg(m, idx) {
+  const role = m.role || 'assistant';
+  const label = (m.label || role).replace(/_/g, ' ');
+  const boiler = m.boilerplate ? ' boiler' : '';
+  let inner = '';
+  if (role === 'tool_call') {
+    inner = `<div class="fn">${escape(m.name || 'tool')}()</div>`;
+    if (m.arguments !== undefined) {
+      inner += `<details class="args"><summary>arguments</summary>` +
+               `<pre class="json">${escape(pretty(m.arguments))}</pre></details>`;
+    }
+  } else if (role === 'tool_result') {
+    const full = pretty(m.content !== undefined ? m.content : m.text);
+    const long = full.length > 240;
+    if (long) {
+      inner = `<details class="args"><summary class="result-summary">result (${full.length} chars)</summary>` +
+              `<pre class="json annotatable" data-idx="${idx}">${escape(full)}</pre></details>`;
+    } else {
+      inner = `<pre class="json annotatable" data-idx="${idx}">${escape(full)}</pre>`;
+    }
+  } else {
+    const text = m.text !== undefined ? m.text : pretty(m.content);
+    inner = `<div class="text annotatable" data-idx="${idx}">${md(text)}</div>`;
+  }
+  return `<div class="msg${boiler}" data-role="${role}" data-idx="${idx}">` +
+         `<div class="role">${escape(label)}</div>${inner}</div>`;
+}
+
+/* ------------------------------------------------------------------ *
+ * Highlights + margin notes                                          *
+ * ------------------------------------------------------------------ */
+function itemsForTrace() {
+  const tid = curTrace() ? curTrace().trace_id : null;
+  const anns = state.annotations.filter(a => a.trace_id === tid).map(a => ({...a, kind: 'human'}));
+  const sugg = state.suggestions.filter(s => s.trace_id === tid).map(s => ({...s, kind: 'sugg'}));
+  return [...anns, ...sugg];
+}
+
+/* Wrap each item's [start,end] span within its target block in a <span.hl>.
+   We re-render text then walk offsets, so overlapping spans stay simple: we
+   only highlight the first occurrence of the quote inside its block. */
+function applyHighlights() {
+  const items = itemsForTrace();
+  document.querySelectorAll('.annotatable').forEach(el => {
+    const idx = parseInt(el.dataset.idx, 10);
+    const mine = items.filter(it => it.idx === idx || it.idx === undefined);
+    if (!mine.length) return;
+    let text = el.textContent;
+    // Build a list of [start, end, item] ranges found by quote match.
+    const ranges = [];
+    mine.forEach(it => {
+      if (!it.quote) return;
+      const pos = text.indexOf(it.quote);
+      if (pos >= 0) ranges.push([pos, pos + it.quote.length, it]);
+    });
+    if (!ranges.length) return;
+    ranges.sort((a, b) => a[0] - b[0]);
+    let out = '', cursor = 0;
+    ranges.forEach(([s, e, it]) => {
+      if (s < cursor) return; // skip overlaps
+      out += escape(text.slice(cursor, s));
+      const cls = it.kind === 'sugg' ? 'hl sugg' : 'hl';
+      out += `<span class="${cls}" data-item="${it.id}">${escape(text.slice(s, e))}</span>`;
+      cursor = e;
+    });
+    out += escape(text.slice(cursor));
+    el.innerHTML = out;
+  });
+}
+
+/* Position margin notes absolutely, top offset = highlight top relative to the
+   margin container (NO scrollTop; that double-counts). Stack with a min gap. */
+function layoutMargin() {
+  const col = document.getElementById('margin-col');
+  col.innerHTML = '';
+  const items = itemsForTrace();
+  if (!items.length) return;
+  const colRect = col.getBoundingClientRect();
+  const placed = [];
+  let lastBottom = 0;
+  // order by vertical position of the highlight
+  const withPos = items.map(it => {
+    const hl = document.querySelector(`.hl[data-item="${it.id}"]`);
+    const top = hl ? (hl.getBoundingClientRect().top - colRect.top) : 0;
+    return {it, top, hl};
+  }).sort((a, b) => a.top - b.top);
+
+  withPos.forEach(({it, top, hl}) => {
+    const note = document.createElement('div');
+    note.className = 'mnote ' + (it.kind === 'sugg' ? 'sugg' : 'human');
+    note.dataset.item = it.id;
+    let html = '';
+    if (it.kind === 'sugg') html += `<div class="tag">agent · ${escape(it.mode || '')}</div>`;
+    if (it.quote) html += `<div class="quote">"${escape(clip(it.quote, 80))}"</div>`;
+    html += `<div class="body">${escape(it.note || (it.kind === 'sugg' ? '(suggested instance)' : ''))}</div>`;
+    if (it.kind === 'sugg') {
+      html += `<div class="acts"><button class="accept" data-accept="${it.id}">accept</button>` +
+              `<button class="reject" data-reject="${it.id}">dismiss</button></div>`;
+    } else {
+      html += `<div class="acts"><button data-del="${it.id}">delete</button></div>`;
+    }
+    note.innerHTML = html;
+    const y = Math.max(top, lastBottom);
+    note.style.top = y + 'px';
+    col.appendChild(note);
+    lastBottom = y + note.offsetHeight + 8;
+
+    // hover linking between note and highlight
+    if (hl) {
+      note.addEventListener('mouseenter', () => hl.classList.add('outline'));
+      note.addEventListener('mouseleave', () => hl.classList.remove('outline'));
+      hl.addEventListener('mouseenter', () => note.classList.add('outline'));
+      hl.addEventListener('mouseleave', () => note.classList.remove('outline'));
+    }
+    placed.push(note);
+  });
+
+  col.querySelectorAll('[data-accept]').forEach(b =>
+    b.onclick = () => acceptSuggestion(b.dataset.accept));
+  col.querySelectorAll('[data-reject]').forEach(b =>
+    b.onclick = () => dismissSuggestion(b.dataset.reject));
+  col.querySelectorAll('[data-del]').forEach(b =>
+    b.onclick = () => deleteAnnotation(b.dataset.del));
+}
+
+/* ------------------------------------------------------------------ *
+ * In-place annotation                                                *
+ * ------------------------------------------------------------------ */
+let pendingRange = null;   // the wrapped pending-highlight span
+let pendingCtx = null;     // {trace_id, quote, idx}
+
+document.getElementById('trace-body').addEventListener('mouseup', () => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return;
+  const text = sel.toString().trim();
+  if (!text) return;
+  const anchor = sel.anchorNode && sel.anchorNode.parentElement
+    ? sel.anchorNode.parentElement.closest('.annotatable') : null;
+  if (!anchor) return;
+
+  // Wrap the range in a pending highlight BEFORE focusing the input, so the
+  // native selection clearing does not lose the reviewer's context.
+  const range = sel.getRangeAt(0);
+  const span = document.createElement('span');
+  span.className = 'hl pending-highlight';
+  try { range.surroundContents(span); } catch (e) { return; }
+  pendingRange = span;
+  pendingCtx = {
+    trace_id: curTrace().trace_id,
+    quote: text,
+    idx: parseInt(anchor.dataset.idx, 10),
+  };
+  sel.removeAllRanges();
+
+  const rect = span.getBoundingClientRect();
+  const pop = document.getElementById('popover');
+  pop.style.display = 'block';
+  pop.style.left = (window.scrollX + rect.left) + 'px';
+  pop.style.top = (window.scrollY + rect.bottom + 6) + 'px';
+  const input = document.getElementById('note-input');
+  input.value = '';
+  input.focus();
+});
+
+document.getElementById('note-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { commitAnnotation(); }
+  else if (e.key === 'Escape') { cancelAnnotation(); }
+});
+document.addEventListener('mousedown', (e) => {
+  const pop = document.getElementById('popover');
+  if (pop.style.display === 'block' && !pop.contains(e.target)) cancelAnnotation();
+});
+
+function clearPending() {
+  if (pendingRange && pendingRange.parentNode) {
+    const parent = pendingRange.parentNode;
+    while (pendingRange.firstChild) parent.insertBefore(pendingRange.firstChild, pendingRange);
+    parent.removeChild(pendingRange);
+    parent.normalize();
+  }
+  pendingRange = null; pendingCtx = null;
+  document.getElementById('popover').style.display = 'none';
+}
+function cancelAnnotation() { clearPending(); renderTrace(); }
+
+async function commitAnnotation() {
+  const note = document.getElementById('note-input').value.trim();
+  if (!note || !pendingCtx) { clearPending(); return; }
+  state.annotations.push({
+    id: 'a' + Date.now() + Math.floor(Math.random() * 1000),
+    trace_id: pendingCtx.trace_id,
+    quote: pendingCtx.quote,
+    idx: pendingCtx.idx,
+    note, ts: new Date().toISOString(),
+  });
+  clearPending();
+  await saveAnnotations();
+  renderTrace();
+  renderProgress();
+  toast('saved · the agent is grouping your notes');
+}
+
+async function deleteAnnotation(id) {
+  state.annotations = state.annotations.filter(a => a.id !== id);
+  await saveAnnotations();
+  renderTrace(); renderProgress();
+}
+
+/* Accepting a suggestion promotes it to a human-confirmed annotation with
+   source accepted_suggestion, and removes it from the queue. */
+async function acceptSuggestion(id) {
+  const s = state.suggestions.find(x => x.id === id);
+  if (!s) return;
+  state.annotations.push({
+    id: 'a' + Date.now() + Math.floor(Math.random() * 1000),
+    trace_id: s.trace_id, quote: s.quote, idx: s.idx,
+    note: s.mode ? `[${s.mode}]` : '(accepted)',
+    source: 'accepted_suggestion', mode: s.mode, ts: new Date().toISOString(),
+  });
+  state.suggestions = state.suggestions.filter(x => x.id !== id);
+  await saveAnnotations();
+  await api.post('/api/suggestions', state.suggestions);
+  renderTrace(); renderProgress();
+}
+async function dismissSuggestion(id) {
+  state.suggestions = state.suggestions.filter(x => x.id !== id);
+  await api.post('/api/suggestions', state.suggestions);
+  renderTrace(); renderProgress();
+}
+
+/* ------------------------------------------------------------------ *
+ * Progress view                                                      *
+ * ------------------------------------------------------------------ */
+function renderProgress() {
+  renderTreemap();
+  renderQueue();
+}
+
+/* Normalize the taxonomy into [{name, ...}] regardless of on-disk shape.
+   During a live session the agent pushes a flat map {mode_name: {...}} as it
+   groups notes. The committed demo/final state uses the Artifact L schema:
+   {modes: [{name, ...}], human_signoff, reconciliation}. Accept both. */
+function normalizePatterns(p) {
+  if (!p || typeof p !== 'object') return [];
+  if (Array.isArray(p.modes)) return p.modes.filter(m => m && m.name);
+  return Object.entries(p).map(([name, m]) => ({name, ...(m || {})}));
+}
+function modeCount(m) {
+  // a live mode carries `count`; a final mode carries the any-instance count.
+  if (typeof m.count === 'number') return m.count;
+  if (typeof m.any_instance_count === 'number') return m.any_instance_count;
+  if (typeof m.first_failure_count === 'number') return m.first_failure_count;
+  return (m.example_trace_ids || []).length;
+}
+
+function renderTreemap() {
+  const el = document.getElementById('treemap');
+  const modes = normalizePatterns(state.patterns);
+  if (!modes.length) { el.innerHTML = '<div class="empty">No modes yet. As you annotate, the agent groups your notes here.</div>'; return; }
+  // block area roughly proportional to count via flex-grow
+  modes.sort((a, b) => modeCount(b) - modeCount(a));
+  el.innerHTML = modes.map(m => {
+    // a live mode has free-text example_quotes; a final mode lists trace ids.
+    const ids = m.example_trace_ids || [];
+    const quotes = m.example_quotes || [];
+    const items = (quotes.length ? quotes : ids).slice(0, 6).map((val, i) =>
+      `<li data-tid="${escape(quotes.length ? (ids[i] || '') : val)}">${escape(clip(val, 90))}</li>`).join('');
+    const status = m.status || 'candidate';
+    const grow = Math.max(1, modeCount(m));
+    const sev = typeof m.severity === 'number' ? ` · sev ${m.severity}` : '';
+    return `<div class="mode-block" style="flex-grow:${grow}">` +
+      `<h3>${escape(m.name)}<span class="status ${status}">${status}</span>` +
+      `<span class="count">${modeCount(m)}${sev}</span></h3>` +
+      `<div class="def">${escape(m.definition || '')}</div>` +
+      `<ul class="notes">${items}</ul></div>`;
+  }).join('');
+  el.querySelectorAll('li[data-tid]').forEach(li => {
+    li.onclick = () => { if (li.dataset.tid) gotoTrace(li.dataset.tid); };
+  });
+}
+
+function renderQueue() {
+  const el = document.getElementById('sugg-queue');
+  if (!state.suggestions.length) { el.innerHTML = '<div class="empty">No pending suggestions.</div>'; return; }
+  const rows = state.suggestions.map(s =>
+    `<div class="sugg-row"><input type="checkbox" data-id="${s.id}" checked />` +
+    `<span class="mode">${escape(s.mode || '')}</span>` +
+    `<span class="quote" data-tid="${escape(s.trace_id)}">"${escape(clip(s.quote || '', 110))}"</span></div>`
+  ).join('');
+  el.innerHTML =
+    `<div class="queue-tools">` +
+    `<label><input type="checkbox" id="sel-all" checked /> select all</label>` +
+    `<button class="accept" id="accept-sel">Accept selected</button>` +
+    `<button class="dismiss" id="dismiss-sel">Dismiss selected</button>` +
+    `<span class="empty" style="padding:0">${state.suggestions.length} pending · favor recall, prune the rest</span>` +
+    `</div>` + rows;
+
+  document.getElementById('sel-all').onchange = (e) => {
+    el.querySelectorAll('.sugg-row input[type=checkbox]').forEach(c => c.checked = e.target.checked);
+  };
+  el.querySelectorAll('.quote[data-tid]').forEach(q =>
+    q.onclick = () => gotoTrace(q.dataset.tid));
+  document.getElementById('accept-sel').onclick = () => bulkQueue(true);
+  document.getElementById('dismiss-sel').onclick = () => bulkQueue(false);
+}
+
+async function bulkQueue(accept) {
+  const el = document.getElementById('sugg-queue');
+  const ids = [...el.querySelectorAll('.sugg-row input[type=checkbox]:checked')].map(c => c.dataset.id);
+  for (const id of ids) { accept ? await acceptSuggestion(id) : await dismissSuggestion(id); }
+}
+
+/* ------------------------------------------------------------------ *
+ * Labeling view (Part D/E): present/absent per sample x mode          *
+ * ------------------------------------------------------------------ */
+function labelFor(mode, traceId) {
+  const rows = state.labels[mode] || [];
+  const row = rows.find(r => r.trace_id === traceId);
+  return row ? row.label : undefined;
+}
+
+async function setLabel(mode, traceId, label) {
+  const rows = state.labels[mode] || (state.labels[mode] = []);
+  const existing = rows.find(r => r.trace_id === traceId);
+  if (existing) existing.label = label; else rows.push({trace_id: traceId, label});
+  renderLabeling();
+  await api.post('/api/labels', {mode, trace_id: traceId, label});
+}
+
+function renderLabeling() {
+  const modes = normalizePatterns(state.patterns);
+  const empty = document.getElementById('labeling-empty');
+  const wrap = document.getElementById('labeling-wrap');
+  if (!modes.length) { empty.style.display = 'block'; wrap.innerHTML = ''; return; }
+  empty.style.display = 'none';
+  if (!state.samples.length) { wrap.innerHTML = '<div class="empty">No samples loaded.</div>'; return; }
+
+  const head = `<tr><th>trace</th>` +
+    modes.map(m => `<th class="mode-col" title="${escape(m.definition || '')}">${escape(m.name)}</th>`).join('') +
+    `</tr>`;
+  const rows = state.samples.map(s => {
+    const tid = s.trace_id || s.id;
+    const snippet = clip((s.text || '').replace(/\n/g, ' '), 90);
+    const cells = modes.map(m => {
+      const v = labelFor(m.name, tid);
+      const failOn = v === 1 ? ' on' : '';
+      const passOn = v === 0 ? ' on' : '';
+      return `<td><div class="tri">` +
+        `<button class="fail${failOn}" data-mode="${escape(m.name)}" data-tid="${escape(tid)}" data-val="1">Fail</button>` +
+        `<button class="pass${passOn}" data-mode="${escape(m.name)}" data-tid="${escape(tid)}" data-val="0">Pass</button>` +
+        `</div></td>`;
+    }).join('');
+    return `<tr><td class="trace-col" data-tid="${escape(tid)}"><div class="tid">${escape(tid)}</div>` +
+      `<div class="snippet">${escape(snippet)}</div></td>${cells}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<table>${head}${rows}</table>`;
+  wrap.querySelectorAll('td.trace-col').forEach(td => td.onclick = () => gotoTrace(td.dataset.tid));
+  wrap.querySelectorAll('.tri button').forEach(btn => {
+    btn.onclick = () => setLabel(btn.dataset.mode, btn.dataset.tid, parseInt(btn.dataset.val, 10));
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Map view (canvas scatter of the 2D projection)                     *
+ * ------------------------------------------------------------------ */
+function renderMap() {
+  const canvas = document.getElementById('map');
+  const nodes = state.graph.nodes || [];
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = 620;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  if (!nodes.length) {
+    ctx.fillStyle = '#9ca3af'; ctx.font = '13px sans-serif';
+    ctx.fillText('No projection yet (GET /api/graph is empty).', 20, 30);
+    return;
+  }
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 30;
+  const sx = v => pad + (v - minX) / ((maxX - minX) || 1) * (w - 2 * pad);
+  const sy = v => pad + (v - minY) / ((maxY - minY) || 1) * (h - 2 * pad);
+  const hues = ['#94a3b8','#a78bfa','#60a5fa','#34d399','#fbbf24','#f472b6','#22d3ee','#fb923c'];
+  const sampleIds = new Set(state.samples.map(s => s.trace_id));
+  const annIds = new Set(state.annotations.map(a => a.trace_id));
+
+  nodes.forEach(n => {
+    const annotated = annIds.has(n.trace_id);
+    const sampled = sampleIds.has(n.trace_id);
+    ctx.beginPath();
+    ctx.arc(sx(n.x), sy(n.y), sampled ? 6 : 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = annotated ? '#f97316' : hues[(n.cluster || 0) % hues.length];
+    ctx.fill();
+    if (sampled) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#1a1a1a'; ctx.stroke(); }
+  });
+
+  canvas._nodes = nodes.map(n => ({...n, px: sx(n.x), py: sy(n.y)}));
+}
+document.getElementById('map').addEventListener('click', (e) => {
+  const canvas = document.getElementById('map');
+  const nodes = canvas._nodes || [];
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let best = null, bestD = 1e9;
+  const sampleIds = new Set(state.samples.map(s => s.trace_id));
+  nodes.forEach(n => {
+    if (!sampleIds.has(n.trace_id)) return;
+    const d = (n.px - mx) ** 2 + (n.py - my) ** 2;
+    if (d < bestD) { bestD = d; best = n; }
+  });
+  if (best && bestD < 200) gotoTrace(best.trace_id);
+});
+
+/* ------------------------------------------------------------------ *
+ * Navigation + view switching                                        *
+ * ------------------------------------------------------------------ */
+function gotoTrace(tid) {
+  const i = state.samples.findIndex(s => s.trace_id === tid);
+  if (i < 0) { toast('that trace is not in the current sample'); return; }
+  state.cur = i;
+  switchView('trace');
+  renderHeader(); renderTrace(); updatePos();
+}
+function updatePos() {
+  document.getElementById('pos').textContent =
+    state.samples.length ? `${state.cur + 1} / ${state.samples.length}` : '0 / 0';
+}
+document.getElementById('prev').onclick = () => {
+  if (state.cur > 0) { state.cur--; renderHeader(); renderTrace(); updatePos(); }
+};
+document.getElementById('next').onclick = () => {
+  if (state.cur < state.samples.length - 1) { state.cur++; renderHeader(); renderTrace(); updatePos(); }
+};
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'j' || e.key === 'ArrowDown' || e.key === 'ArrowRight') document.getElementById('next').click();
+  if (e.key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowLeft') document.getElementById('prev').click();
+});
+
+function switchView(name) {
+  document.querySelectorAll('.views button').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === name));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(name + '-view').classList.add('active');
+  document.getElementById('trace-nav').style.display = name === 'trace' ? 'flex' : 'none';
+  if (name === 'map') renderMap();
+  if (name === 'progress') renderProgress();
+  if (name === 'labeling') renderLabeling();
+}
+document.querySelectorAll('.views button').forEach(b =>
+  b.onclick = () => switchView(b.dataset.view));
+
+function updateCounts() {
+  const modes = normalizePatterns(state.patterns);
+  const distinctReviewed = new Set(state.annotations.map(a => a.trace_id)).size;
+  const labeled = modes.length && state.samples.length
+    ? modes.reduce((sum, m) => sum + state.samples.filter(s => labelFor(m.name, s.trace_id || s.id) !== undefined).length, 0)
+    : 0;
+  const labelTotal = modes.length * state.samples.length;
+  document.getElementById('counts').textContent =
+    `${state.samples.length} sampled · ${distinctReviewed} reviewed · ${state.annotations.length} notes · ` +
+    `${modes.length} modes · ${state.suggestions.length} suggestions` +
+    (labelTotal ? ` · ${labeled}/${labelTotal} labels` : '');
+}
+
+/* ------------------------------------------------------------------ *
+ * Polling: pick up agent pushes (samples, suggestions, patterns) and *
+ * replayed annotations. Compare-and-render, ~2s, like the watcher.   *
+ * ------------------------------------------------------------------ */
+let lastSig = '';
+async function poll() {
+  try {
+    const [samples, suggestions, patterns, annotations, labels] = await Promise.all([
+      api.get('/api/samples'), api.get('/api/suggestions'),
+      api.get('/api/patterns'), api.get('/api/annotations'), api.get('/api/labels'),
+    ]);
+    state.labels = labels && typeof labels === 'object' ? labels : state.labels;
+    const newSampleCount = Array.isArray(samples) ? samples.length : 0;
+    const grewSamples = newSampleCount > state.samples.length;
+    const newSuggCount = Array.isArray(suggestions) ? suggestions.length : 0;
+    const grewSugg = newSuggCount > state.suggestions.length;
+
+    // Merge remote annotations that this client did not create (replay demo,
+    // or a second reviewer). De-dup by id, falling back to a content key for
+    // seeded items that arrive without one.
+    const key = a => a.id || `${a.trace_id}::${(a.note || '').slice(0, 40)}`;
+    const seen = new Set(state.annotations.map(key));
+    const remote = asAnnotationList(annotations);
+    const merged = [...state.annotations];
+    remote.forEach(a => { const k = key(a); if (!seen.has(k)) { seen.add(k); merged.push(a); } });
+
+    const labelCount = Object.values(state.labels).reduce((n, rows) => n + rows.length, 0);
+    const sig = JSON.stringify([newSampleCount, newSuggCount,
+      normalizePatterns(patterns).length, merged.length, labelCount]);
+    if (sig === lastSig) return;
+    lastSig = sig;
+
+    state.samples = Array.isArray(samples) ? samples : state.samples;
+    state.suggestions = Array.isArray(suggestions) ? suggestions : state.suggestions;
+    state.patterns = patterns && typeof patterns === 'object' ? patterns : state.patterns;
+    state.annotations = merged;
+
+    if (grewSamples) toast(`new traces added to your batch (${newSampleCount})`);
+    if (grewSugg) toast(`new agent suggestions to review (${newSuggCount})`);
+
+    renderHeader(); renderTrace(); renderProgress(); renderLabeling(); updatePos(); updateCounts();
+  } catch (e) { /* server not up yet; keep trying */ }
+}
+
+/* ------------------------------------------------------------------ *
+ * Utilities                                                          *
+ * ------------------------------------------------------------------ */
+function escape(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function md(s) {
+  return escape(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+function pretty(v) {
+  if (typeof v === 'string') return v;
+  try { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }
+}
+function clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+window.addEventListener('resize', () => {
+  if (document.getElementById('map-view').classList.contains('active')) renderMap();
+  else layoutMargin();
+});
+
+/* ------------------------------------------------------------------ *
+ * Boot                                                               *
+ * ------------------------------------------------------------------ */
+(async function boot() {
+  await loadAll();
+  renderHeader(); renderTrace(); renderProgress(); updatePos(); updateCounts();
+  setInterval(poll, 2000);
+})();
+</script>
+</body>
+</html>
