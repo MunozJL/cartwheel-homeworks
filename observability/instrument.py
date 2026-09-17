@@ -115,7 +115,7 @@ def record_tool_result(ctx: "AuthContext", result: dict[str, Any]) -> None:
 
     OpenLLMetry creates the tool span and records its name, arguments, and
     result. The tool wrappers call this helper before that span ends.
-    Add the caller's user_role and string user_id, plus the integer store_id
+    Add the caller's user_role and string user_id, plus the string store_id
     for merchants, then record the permission decision with the helper below.
     When tracing is off, the active span is non-recording and this is a no-op.
     """
@@ -124,8 +124,8 @@ def record_tool_result(ctx: "AuthContext", result: dict[str, Any]) -> None:
         return
     span.set_attribute("cartwheel.user_role", ctx.role)
     span.set_attribute("cartwheel.user_id", str(ctx.user_id))
-    if ctx.role == "merchant":
-        span.set_attribute("cartwheel.store_id", int(ctx.store_id))
+    if ctx.role == "merchant" and ctx.store_id is not None:
+        span.set_attribute("cartwheel.store_id", str(ctx.store_id))
     _set_permission_denied_attributes(span, result)
 
 
