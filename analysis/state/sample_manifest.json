@@ -178,5 +178,185 @@
     "reason": "random pick",
     "batch": "batch1_cluster",
     "picked_at": "2026-09-17T15:48:22Z"
+  },
+  {
+    "trace_id": "f521c2b5cd13b52a7fda5c65fd3a6a65",
+    "reason": "batch2_intent:order_status",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "55baf3ed4d775462a1ec4469b90f2443",
+    "reason": "batch2_intent:order_status",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "1aa8da68fc96f745194ae325e28a21f4",
+    "reason": "batch2_intent:order_status",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "097f1dd3bdab4abef11008b5694ab2fb",
+    "reason": "batch2_intent:order_status",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "864a647f12c71b110c668c5e0c10f3bd",
+    "reason": "batch2_intent:product_search",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "c58b07e6f85f13e25c819beb0222522f",
+    "reason": "batch2_intent:product_search",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "b25bd619152e1c8238aeff6c51a84253",
+    "reason": "batch2_intent:product_search",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "f545f6d792dd11fd4582d84d504c9d57",
+    "reason": "batch2_intent:product_search",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "9b4c3fcc59ad5e8620eaea011f974b4c",
+    "reason": "batch2_intent:return_or_refund_eligibility",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "499295cba39c43eb60fc452a4f33a844",
+    "reason": "batch2_intent:return_or_refund_eligibility",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "5c9ea6b3bdef49d210779baee710012f",
+    "reason": "batch2_intent:return_or_refund_eligibility",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "71ad829db2ed36093ccd3b5cc9e8b72a",
+    "reason": "batch2_intent:return_or_refund_eligibility",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "ca4af8b674e9aa7eaecc23b411d66d21",
+    "reason": "batch2_intent:issue_refund",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "1d34ae4a8fdb9fc02cfc7f4663960331",
+    "reason": "batch2_intent:issue_refund",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "66a7d780de909ebf650478dfbcc94c83",
+    "reason": "batch2_intent:issue_refund",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "d7358c1f6798a48f9571439bccbbb164",
+    "reason": "batch2_intent:issue_refund",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "121ed316437f037ebd8e623e6b495b97",
+    "reason": "batch2_intent:policy_question",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "2d942cb7bcc10ab6a1e94ef1ffefc09b",
+    "reason": "batch2_intent:policy_question",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "2ca7429e9495954ef586727a4b8906b5",
+    "reason": "batch2_intent:policy_question",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "cf0587e2b419037122430fb21be72e5b",
+    "reason": "batch2_intent:policy_question",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "bffa7d818352be464ef8d0107b72810a",
+    "reason": "batch2_intent:cancel_order",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "063f2a8346796b43b924931b490ec0cd",
+    "reason": "batch2_intent:cancel_order",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "f4b46b676b2cc5ea179c95246c71f2fb",
+    "reason": "batch2_intent:cancel_order",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "3734eae091b3f23e514d2a35a29db408",
+    "reason": "batch2_intent:cancel_order",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "f9c0ed3c8356223ab13e0d0fb805c0f5",
+    "reason": "batch2_intent:escalation_or_dispute",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "13c049b2c4a18dea5a81fa8c3a524f13",
+    "reason": "batch2_intent:escalation_or_dispute",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "580361dbc4ab9b4a83a05650724947b5",
+    "reason": "batch2_intent:escalation_or_dispute",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "05ed4652cf47dd9cc6120e337f502c19",
+    "reason": "batch2_intent:out_of_scope_refusal",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "aa3479cef903b67827fa954e32b6b1e4",
+    "reason": "batch2_intent:out_of_scope_refusal",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
+  },
+  {
+    "trace_id": "e7824ac892ad81e241b45d52c2426859",
+    "reason": "batch2_intent:out_of_scope_refusal",
+    "batch": "batch2_intent",
+    "picked_at": "2026-09-18T18:34:24Z"
   }
 ]
