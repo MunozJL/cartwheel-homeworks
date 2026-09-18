@@ -129,6 +129,17 @@ def build_pool(limit: int = 1000, force_offline: bool = False) -> dict[str, Any]
 
     traces = normalize_traces(raw)
     scenario_index = _load_scenario_index()
+    # Restrict to the 250-scenario FINAL run (ids "support-*"). HW3's pilot
+    # traces ("pilot-*") share the same Langfuse project but aren't joinable
+    # against scenarios/support_scenarios.jsonl, so they'd show no expected-
+    # outcome/ground-truth in the review header -- a real degradation, not
+    # just a scope-purity concern. Traces with no scenario_id at all (there
+    # are none in this project as of this build, but defensively) are kept,
+    # since dropping unscoped review targets isn't the goal here.
+    traces = [
+        t for t in traces
+        if not (t.get("meta", {}).get("scenario_id") or "").startswith("pilot-")
+    ]
     for t in traces:
         sid = t.get("meta", {}).get("scenario_id")
         extra = scenario_index.get(sid, {})

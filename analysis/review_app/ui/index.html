@@ -123,6 +123,20 @@
   .trace-body { flex: 1; max-width: 720px; }
   .margin-col { width: 240px; position: relative; flex-shrink: 0; }
 
+  /* marks the seam between conversational turns in a merged multi-turn
+     session, so a second user message never reads as a fresh trace */
+  .turn-divider {
+    text-align: center; color: var(--muted); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 14px;
+    position: relative;
+  }
+  .turn-divider::before, .turn-divider::after {
+    content: ""; position: absolute; top: 50%; width: 38%;
+    border-top: 1px dashed var(--line);
+  }
+  .turn-divider::before { left: 0; }
+  .turn-divider::after { right: 0; }
+
   /* a step groups a tool call + its result (Gestalt common region) */
   .step {
     border: 1px solid var(--line); border-radius: 8px;
@@ -431,9 +445,17 @@ function renderTrace() {
   if (!s || !Array.isArray(s.trace)) { body.innerHTML = ''; return; }
   const html = [];
   let i = 0;
+  let turn = 0;
   const msgs = s.trace;
   while (i < msgs.length) {
     const m = msgs[i];
+    // A new user message after the first starts a new conversational turn
+    // (this trace is a merged multi-turn session -- see meta.scenario_id).
+    // Mark the seam explicitly so a second turn never reads as a fresh trace.
+    if (m.role === 'user') {
+      turn++;
+      if (turn > 1) html.push(`<div class="turn-divider">Turn ${turn}</div>`);
+    }
     if (m.role === 'tool_call') {
       // group this call with an immediately-following result
       const parts = [renderMsg(m, i)];
