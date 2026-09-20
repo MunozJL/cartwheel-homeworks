@@ -90,6 +90,10 @@
     width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font: inherit;
   }
   .nav .pos { color: var(--muted); font-size: 13px; min-width: 74px; text-align: center; }
+  .nav select {
+    border: 1px solid var(--line); background: var(--bg); font: inherit;
+    font-size: 13px; padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  }
 
   /* ---- toast banner for new samples/suggestions ---- */
   #toast {
@@ -295,6 +299,7 @@
   </div>
   <div class="spacer"></div>
   <div class="nav" id="trace-nav">
+    <select id="batch-jump" title="jump to the first trace of a batch"></select>
     <button id="prev">&larr;</button>
     <span class="pos" id="pos">0 / 0</span>
     <button id="next">&rarr;</button>
@@ -905,6 +910,37 @@ function updatePos() {
   document.getElementById('pos').textContent =
     state.samples.length ? `${state.cur + 1} / ${state.samples.length}` : '0 / 0';
 }
+
+/* One option per distinct sample.batch, in first-seen order, jumping to
+   that batch's first trace. Batches are stamped by seed_batch*.py
+   (e.g. "batch1_uniform", "batch2_intent"); older/manually-added samples
+   without a batch field are grouped under "(unbatched)". */
+let lastBatchSig = '';
+function populateBatchJump() {
+  const sig = state.samples.map(s => s.batch || '').join(',');
+  if (sig === lastBatchSig) return;
+  lastBatchSig = sig;
+  const sel = document.getElementById('batch-jump');
+  const firstIndexByBatch = new Map();
+  state.samples.forEach((s, i) => {
+    const b = s.batch || '(unbatched)';
+    if (!firstIndexByBatch.has(b)) firstIndexByBatch.set(b, i);
+  });
+  const opts = ['<option value="">jump to batch…</option>'];
+  firstIndexByBatch.forEach((idx, b) => {
+    const count = state.samples.filter(s => (s.batch || '(unbatched)') === b).length;
+    opts.push(`<option value="${idx}">${escape(b)} (${count})</option>`);
+  });
+  sel.innerHTML = opts.join('');
+}
+document.getElementById('batch-jump').addEventListener('change', (e) => {
+  const idx = parseInt(e.target.value, 10);
+  if (!Number.isNaN(idx)) {
+    state.cur = idx;
+    renderHeader(); renderTrace(); updatePos();
+  }
+  e.target.value = '';
+});
 document.getElementById('prev').onclick = () => {
   if (state.cur > 0) { state.cur--; renderHeader(); renderTrace(); updatePos(); }
 };
@@ -983,6 +1019,7 @@ async function poll() {
     if (grewSamples) toast(`new traces added to your batch (${newSampleCount})`);
     if (grewSugg) toast(`new agent suggestions to review (${newSuggCount})`);
 
+    populateBatchJump();
     renderHeader(); renderTrace(); renderProgress(); renderLabeling(); updatePos(); updateCounts();
   } catch (e) { /* server not up yet; keep trying */ }
 }
@@ -1021,6 +1058,7 @@ window.addEventListener('resize', () => {
  * ------------------------------------------------------------------ */
 (async function boot() {
   await loadAll();
+  populateBatchJump();
   renderHeader(); renderTrace(); renderProgress(); updatePos(); updateCounts();
   setInterval(poll, 2000);
 })();
