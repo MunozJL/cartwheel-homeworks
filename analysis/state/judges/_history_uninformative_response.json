@@ -3,6 +3,10 @@
     {
       "judge_id": "uninformative_response-v0",
       "prompt_hash": "c63d6091652d"
+    },
+    {
+      "judge_id": "uninformative_response-v1",
+      "prompt_hash": "c63d6091652d"
     }
   ]
 }

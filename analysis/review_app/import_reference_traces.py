@@ -68,7 +68,18 @@ def _trace_event(t: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_OBS_EVENT_TYPE = {"SPAN": "span-create", "GENERATION": "generation-create", "EVENT": "event-create"}
+# normalize_trace()'s _messages() skips SPAN/AGENT observations entirely
+# before they reach per-observation parsing, so a TOOL observation ingested
+# as span-create would round-trip back as type "SPAN" and stay invisible to
+# every downstream consumer (the judge included). Langfuse's ingestion API
+# has no native tool type; event-create is the only mapping that survives
+# _messages()'s type dispatch and actually surfaces the tool's output text.
+_OBS_EVENT_TYPE = {
+    "SPAN": "span-create",
+    "GENERATION": "generation-create",
+    "EVENT": "event-create",
+    "TOOL": "event-create",
+}
 
 
 def _observation_event(o: dict[str, Any], trace_id: str) -> dict[str, Any] | None:
