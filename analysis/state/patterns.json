@@ -1,1 +1,21 @@
-{"modes": []}
+{
+  "modes": [
+    {
+      "name": "uninformative_response",
+      "definition": "The final reply omits information the user needs for the next decision, or adds detail that makes the needed information harder to find.",
+      "positive_trace_ids": [
+        "f5dd32b217b7b273d761640f63355512",
+        "1242fc11a51a78e0bf6aa0abd06a9c49",
+        "d47b3ac5990d737c43cc67129d5ce3fe"
+      ],
+      "close_negative_trace_ids": [
+        "13bc170360f221fe75c16853971b4c0f",
+        "49efeff9f4f63aa087e482812624e9f6",
+        "a0e3934d53f39f808bcce6c297db6903"
+      ],
+      "boundary": "Judge the reply against what this user asked for. A short answer is not a failure when the user requested a short answer. Extra detail is a failure only when it obscures the answer or the next step.",
+      "evaluator_type": "llm_judge",
+      "requirement_source": "RESP-3"
+    }
+  ]
+}
